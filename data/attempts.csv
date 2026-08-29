@@ -1,0 +1,25 @@
+attempt_id,case_id,student_name,status,started_at,completed_at,student_root_cause,student_osi_layer,student_next_command,student_fix,ai_root_cause,matches_expected_concept
+ATT-0001,GW-001,sappy,COMPLETED,2026-08-25T09:32:07Z,2026-08-25T09:33:12Z,"PC-B has no default gateway configured. Its IP address and subnet mask are correct for VLAN 20, so it can communicate with hosts on 10.10.20.0/24. Because the Default Gateway field is blank, PC-B has no route for destinations outside its local subnet and therefore cannot reach R1 at 10.10.20.1 or anything beyond it.",Layer 3,PC-B> ipconfig /all,"Configure PC-B's default gateway as:
+
+10.10.20.1
+
+If PC-B should use DHCP, fix the DHCP scope for VLAN 20 so it advertises 10.10.20.1 as the default gateway (DHCP option 3), then renew the lease.",,False
+ATT-0002,GW-001,sappy,COMPLETED,2026-08-25T09:34:30Z,2026-08-25T09:34:40Z,"PC-B has no default gateway configured. Its IP address and subnet mask are correct for VLAN 20, so it can communicate with hosts on 10.10.20.0/24. Because the Default Gateway field is blank, PC-B has no route for destinations outside its local subnet and therefore cannot reach R1 at 10.10.20.1 or anything beyond it.",Layer 3,PC-B> ipconfig /all,"Configure PC-B's default gateway as:
+
+10.10.20.1
+
+If PC-B should use DHCP, fix the DHCP scope for VLAN 20 so it advertises 10.10.20.1 as the default gateway (DHCP option 3), then renew the lease.",PC-B has no default gateway configured.,False
+ATT-0003,GW-001,sappy,COMPLETED,2026-08-27T17:58:58Z,2026-08-27T18:00:30Z,"PC-B has no default gateway configured. The Default Gateway field is blank, so PC-B can communicate with devices on its local 10.10.20.0/24 subnet but has no Layer-3 next hop for destinations outside that subnet. The router’s VLAN 20 interface (10.10.20.1) is up/up, so the evidence points to the PC configuration rather than the router interface.",Layer 3,ipconfig /all,"Configure PC-B's default gateway as:
+10.10.20.1
+For example:
+ip 10.10.20.15 255.255.255.0 10.10.20.1
+Then test:
+ping 10.10.20.1
+followed by a ping to an address outside the 10.10.20.0/24 subnet.
+Best hypothesis: Missing default gateway on PC-B.",PC-B does not have a default gateway configured.,False
+ATT-0004,GW-001,Sappy,COMPLETED,2026-08-29T17:54:43Z,2026-08-29T17:55:59Z,"PC-B has no default gateway configured. Its IP address and /24 mask are correct, and R1’s VLAN 20 subinterface (10.10.20.1/24) is up/up. Because the gateway field is blank, PC-B can communicate with hosts in its local 10.10.20.0/24 subnet but has no Layer-3 next hop for traffic outside that subnet.",Layer 3,"ipconfig /all on PC-B - already shown here, and it confirms the gateway is blank. If I wanted to verify the router side further: show run interface GigabitEthernet0/1.20","Configure PC-B's default gateway as 10.10.20.1. Then verify with:
+
+ping 10.10.20.1
+ping <remote-subnet-host>
+tracert <remote-subnet-host> (or the platform equivalent)",PC-B has no default gateway configured.,False
+ATT-0005,STP-001,jij,IN_PROGRESS,2026-08-29T18:00:37Z,,,,,,,

@@ -1,0 +1,316 @@
+case_id,title,symptom,topology_note,show_outputs,expected_fault,osi_layer,concept,severity,expected_evidence,expected_next_command,expected_fix,verification_command,difficulty,status,source,created_at,updated_at,created_by
+VLAN-001,PC on wrong VLAN cannot reach file server,"PC-A gets an IP address from DHCP and can ping its own default gateway, but cannot reach FileServer1 (10.10.10.50), which other PCs in the same office reach without issue.","PC-A is connected to SW1 Fa0/6. SW1 Fa0/6 should be in VLAN 10 (Sales) with FileServer1. SW1 uplinks to R1 on Gi0/1 as an 802.1Q trunk carrying VLANs 10,20,30.","SW1# show vlan brief
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+1    default                          active    Fa0/1, Fa0/2
+10   Sales                            active    Fa0/3, Fa0/4, Fa0/5
+20   Engineering                      active    Fa0/6, Fa0/7
+30   Guest                            active    Fa0/8
+
+SW1# show interfaces fa0/6 switchport
+Name: Fa0/6
+Switchport: Enabled
+Administrative Mode: static access
+Operational Mode: static access
+Access Mode VLAN: 20 (Engineering)
+Voice VLAN: none
+","Fa0/6 (PC-A's port) is statically assigned to VLAN 20 (Engineering) instead of VLAN 10 (Sales), placing PC-A in a different broadcast domain than FileServer1.",Layer 2,VLAN,Medium,"show vlan brief confirms VLAN 10 exists and holds FileServer1's segment; show interfaces fa0/6 switchport shows Fa0/6 access VLAN is 20, not 10.",show mac address-table interface fa0/6,switchport access vlan 10 on interface Fa0/6,show vlan brief; then ping 10.10.10.50 from PC-A,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+GW-001,"PC cannot leave local subnet, gateway field blank","PC-B (10.10.20.15/24) can ping other PCs on the same VLAN 20 segment but cannot ping anything outside the subnet, including the router interface.","PC-B connects to SW2 Fa0/3 (VLAN 20). R1 subinterface Gi0/1.20 is 10.10.20.1/24, the intended default gateway for VLAN 20.","PC-B> ipconfig /all
+IP Address..........: 10.10.20.15
+Subnet Mask..........: 255.255.255.0
+Default Gateway......: 
+DNS Servers..........: 10.10.20.1
+
+R1# show ip interface brief
+Interface              IP-Address      OK? Method Status    Protocol
+GigabitEthernet0/1.20  10.10.20.1      YES manual up        up
+","PC-B has no default gateway configured (blank field), so any traffic destined outside 10.10.20.0/24 cannot be routed off the local segment.",Layer 3,Default Gateway,High,ipconfig /all on PC-B shows an empty Default Gateway field even though R1's subinterface 10.10.20.1 is up/up and reachable on the same subnet.,ping 10.10.20.1 from PC-B,Set PC-B's default gateway to 10.10.20.1,ipconfig on PC-B; ping 10.10.20.1; tracert to an external host,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+DHCP-001,New PCs get APIPA addresses instead of DHCP leases,All newly connected PCs in VLAN 30 receive 169.254.x.x addresses instead of addresses in the expected 10.10.30.0/24 range.,R1 is configured to act as the DHCP server for VLAN 30 clients connected through SW3.,"R1# show ip dhcp pool
+% No DHCP pools configured
+
+R1# show running-config | include ip dhcp
+R1# show ip interface brief
+Interface              IP-Address      OK? Method Status    Protocol
+GigabitEthernet0/1.30  10.10.30.1      YES manual up        up
+","No DHCP pool exists on R1 for the 10.10.30.0/24 network, so clients time out on DHCPDISCOVER and self-assign an APIPA address.",Layer 7,DHCP,Critical,"show ip dhcp pool returns no configured pools, while the gateway interface Gi0/1.30 is up with the correct network.",show running-config | section dhcp,Create pool: ip dhcp pool VLAN30; network 10.10.30.0 255.255.255.0; default-router 10.10.30.1; dns-server 8.8.8.8,show ip dhcp binding; ipconfig /renew on client,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+DNS-001,PCs can ping by IP but 'website not found' by name,"PC-C can successfully ping 8.8.8.8 and other external IPs, but browsing to www.internal-app.local or any hostname fails with a name resolution error.",PC-C is a DHCP client on VLAN 10. R1 is the DHCP server. The intended internal DNS server is Server1 at 10.10.10.53.,"PC-C> ipconfig /all
+IP Address..........: 10.10.10.25
+Default Gateway......: 10.10.10.1
+DNS Servers..........: 10.10.10.99
+
+PC-C> ping 8.8.8.8
+Reply from 8.8.8.8: bytes=32 time=1ms TTL=118
+
+R1# show run | section dhcp pool VLAN10
+ip dhcp pool VLAN10
+ network 10.10.10.0 255.255.255.0
+ default-router 10.10.10.1
+ dns-server 10.10.10.99
+","The DHCP pool hands out DNS server 10.10.10.99, which is not Server1 (10.10.10.53) and does not respond to DNS queries, so name resolution fails while raw IP connectivity is fine.",Layer 7,DNS,Medium,ipconfig /all shows DNS Servers 10.10.10.99; raw ping to 8.8.8.8 succeeds (ruling out routing); dhcp pool config confirms dns-server 10.10.10.99 is being advertised instead of .53.,ping 10.10.10.99 and ping 10.10.10.53 from R1,"Change dns-server to 10.10.10.53 in dhcp pool VLAN10, then have clients renew",nslookup www.internal-app.local on PC-C after renew,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+ROUTE-001,Branch router cannot reach HQ server subnet,"PCs at the branch site can reach each other and the branch router, but cannot reach the HQ server subnet 172.16.5.0/24.","BranchR connects to HQR via a serial link (Se0/0/0, 192.168.100.2/30). HQR owns 172.16.5.0/24 on its LAN. No dynamic routing protocol is in use; routes are static.","BranchR# show ip route
+Gateway of last resort is not set
+
+     172.16.1.0/24 is directly connected, GigabitEthernet0/0
+     192.168.100.0/30 is directly connected, Serial0/0/0
+
+BranchR# ping 192.168.100.1
+!!!!!
+Success rate is 100 percent
+
+BranchR# ping 172.16.5.10
+.....
+Success rate is 0 percent
+","BranchR has no route to 172.16.5.0/24. The serial link to HQR is up (192.168.100.1 is reachable), but no static route was added for the HQ server subnet.",Layer 3,Static Routing,High,"show ip route on BranchR lists only directly connected networks (172.16.1.0/24 and 192.168.100.0/30); 172.16.5.0/24 is absent. The next hop 192.168.100.1 is reachable, ruling out a Layer 1/2 fault.",show ip route on HQR to confirm reciprocal route exists,ip route 172.16.5.0 255.255.255.0 192.168.100.1 on BranchR,show ip route; ping 172.16.5.10 from BranchR,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+OSPF-001,OSPF routes to remote LAN missing after new router added,"After R3 was added to the network, hosts on R3's LAN (192.168.30.0/24) cannot be reached from R1's LAN. R1 and R2 still route to each other fine.","R1, R2, and R3 all run OSPF area 0. R2-R3 link is 10.0.23.0/30. R3's LAN is 192.168.30.0/24 on Gi0/0.","R2# show ip ospf neighbor
+Neighbor ID     Pri   State           Dead Time   Address         Interface
+1.1.1.1           1   FULL/BDR        00:00:38    10.0.12.1       Gi0/0
+
+R3# show ip ospf neighbor
+% No OSPF neighbors found
+
+R3# show run | section router ospf
+router ospf 1
+ network 192.168.30.0 0.0.0.255 area 0
+","R3's OSPF process only advertises its LAN network; the 10.0.23.0/30 transit link to R2 was never added to the OSPF network statements, so no adjacency forms with R2 and 192.168.30.0/24 is never learned by R1 or R2.",Layer 3,Dynamic Routing,High,"R3 shows no OSPF neighbors at all, and its ospf config only contains a network statement for 192.168.30.0/24, missing the 10.0.23.0/30 link to R2.",show ip interface brief on R3 to confirm the R2-facing interface is up,Add 'network 10.0.23.0 0.0.0.3 area 0' under router ospf 1 on R3,show ip ospf neighbor on R3; show ip route ospf on R1,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+ACL-001,Admin workstation locked out of router SSH after ACL change,"The network admin can no longer SSH into R1 from the admin workstation (10.10.1.50), though the workstation can ping R1's interface fine.","R1's VTY lines reference access-class MGMT-ACL, intended to permit only the admin subnet 10.10.1.0/24.","R1# show access-lists MGMT-ACL
+Standard IP access list MGMT-ACL
+    10 deny   10.10.1.0 0.0.0.255
+    20 permit any
+
+R1# show run | section line vty
+line vty 0 4
+ access-class MGMT-ACL in
+ transport input ssh
+","MGMT-ACL denies the admin subnet 10.10.1.0/24 (line 10) and permits everyone else (line 20) - the permit/deny logic is inverted from what was intended, blocking exactly the admin workstation that should have access.",Layer 4,ACL,High,"show access-lists MGMT-ACL shows an explicit deny for 10.10.1.0/24 ahead of a permit any, and this ACL is applied inbound on the VTY lines used for SSH.",show access-lists MGMT-ACL (already sufficient; verify no other ACL on the ingress interface),"Rewrite MGMT-ACL: permit 10.10.1.0 0.0.0.255 then deny any, or explicitly permit the admin subnet before any deny statement.",ssh to R1 from 10.10.1.50; show access-lists MGMT-ACL for updated hit counters,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+NAT-001,Only one internal host can reach the internet at a time,"PC1 can browse the internet, but as soon as PC1 is active, PC2 and PC3 (same inside network) cannot get any external pages to load, even though they can ping the ISP-facing interface.",R1 connects the inside network 192.168.1.0/24 to the ISP via Gi0/1 (203.0.113.10). PAT/overload was intended for all inside hosts.,"R1# show ip nat translations
+Pro Inside global      Inside local       Outside local      Outside global
+--- 203.0.113.10       192.168.1.10       -                  -
+
+R1# show run | section ip nat
+ip nat inside source static 192.168.1.10 203.0.113.10
+interface GigabitEthernet0/0
+ ip nat inside
+interface GigabitEthernet0/1
+ ip nat outside
+","Only a single static NAT translation exists (192.168.1.10 to 203.0.113.10). There is no 'ip nat inside source list ... interface Gi0/1 overload' statement, so no other inside host can be translated and reach the internet.",Layer 3,NAT,High,show ip nat translations lists only one static entry for 192.168.1.10; the running-config has a static NAT line but no overload/PAT pool or access-list based dynamic NAT for the rest of 192.168.1.0/24.,show access-lists (to see if a NAT-eligible ACL already exists),Add: access-list 1 permit 192.168.1.0 0.0.0.255; ip nat inside source list 1 interface GigabitEthernet0/1 overload,show ip nat translations while PC2 and PC3 browse simultaneously,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+TRUNK-001,VLAN 10 users on SW2 cannot reach VLAN 10 users on SW1,"PCs in VLAN 10 on SW1 can talk to each other, and PCs in VLAN 10 on SW2 can talk to each other, but VLAN 10 traffic does not cross between the two switches.","SW1 Gi0/1 and SW2 Gi0/1 are connected directly and are meant to form an 802.1Q trunk carrying VLANs 10, 20, 30.","SW1# show interfaces trunk
+Port        Mode             Encapsulation  Status        Native vlan
+Gi0/1       on               802.1q         trunking      1
+
+SW2# show interfaces trunk
+(no output - no trunking interfaces found)
+
+SW2# show interfaces gi0/1 switchport
+Name: Gi0/1
+Switchport: Enabled
+Administrative Mode: static access
+Operational Mode: static access
+Access Mode VLAN: 1 (default)
+","SW2's Gi0/1 is configured as a static access port in VLAN 1, not as a trunk. SW1's side is correctly trunking, but a trunk requires both ends to agree; SW2 is only forwarding VLAN 1 traffic on that link, so VLAN 10/20/30 frames from SW1 are dropped at SW2.",Layer 2,Trunking,High,"show interfaces trunk on SW2 returns no trunking ports at all, and show interfaces gi0/1 switchport confirms Gi0/1 is in static access mode on VLAN 1, while SW1's Gi0/1 is already trunking.",show cdp neighbors to confirm SW1-SW2 are directly connected on the expected ports,On SW2 Gi0/1: switchport trunk encapsulation dot1q; switchport mode trunk,show interfaces trunk on both switches; ping across VLAN 10 between switches,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+IFACE-001,Entire remote office offline after maintenance window,"No device at the remote office can reach anything, including each other through the router. The office lost connectivity right after a scheduled maintenance change.",RemoteR's LAN-facing interface Gi0/0 serves the office subnet 192.168.50.0/24.,"RemoteR# show ip interface brief
+Interface              IP-Address      OK? Method Status                  Protocol
+GigabitEthernet0/0     192.168.50.1    YES manual administratively down   down
+GigabitEthernet0/1     203.0.113.5     YES manual up                      up
+","GigabitEthernet0/0, the LAN interface for the office subnet, is administratively down - almost certainly left shut during the maintenance window and never re-enabled.",Layer 1,Interface State,Critical,"show ip interface brief shows Gi0/0 status as 'administratively down', while Gi0/1 (the WAN-facing side) is up/up, isolating the pattern to the LAN interface only.",show running-config interface gi0/0 to confirm no other issues before re-enabling,interface GigabitEthernet0/0; no shutdown,show ip interface brief; ping 192.168.50.1 from an office PC,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+MASK-001,"One PC can't reach any teammate, others fine","PC-D can ping its default gateway but cannot ping any other PC in the same office, including ones plugged into the same switch. All other PCs on that switch communicate normally.",The office subnet is 192.168.5.0/24 (mask 255.255.255.0). All PCs including PC-D connect to SW1 in VLAN 5.,"PC-D> ipconfig
+IP Address..........: 192.168.5.40
+Subnet Mask..........: 255.255.255.192
+Default Gateway......: 192.168.5.1
+
+PC-E> ipconfig
+IP Address..........: 192.168.5.41
+Subnet Mask..........: 255.255.255.0
+Default Gateway......: 192.168.5.1
+","PC-D uses mask 255.255.255.192 (/26) while the rest of the subnet uses 255.255.255.0 (/24). With a /26 mask, PC-D computes PC-E (192.168.5.41) as being on a different network (192.168.5.0/26 vs 192.168.5.64/26 boundary confusion), so it sends peer traffic to the gateway instead of ARPing directly, and the gateway has no route back for that mismatched logic.",Layer 3,Subnetting,Medium,PC-D's subnet mask (255.255.255.192) does not match PC-E's subnet mask (255.255.255.0) despite both being on the same physical VLAN and IP range.,ipconfig on two more PCs on the same switch to confirm the mask standard,Correct PC-D's subnet mask to 255.255.255.0,ping between PC-D and PC-E after the mask correction,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+DUPIP-001,"Intermittent connectivity, Windows shows IP conflict warning","PC-F intermittently loses network connectivity, and its taskbar occasionally shows a Windows message about an IP address conflict with another device on the network.","PC-F was statically configured at 10.10.10.20. Printer1 was also statically configured, by a different technician, without checking the DHCP exclusion range.","PC-F> ipconfig
+IP Address..........: 10.10.10.20
+
+R1# show ip arp | include 10.10.10.20
+Internet  10.10.10.20        4   00E0.1234.ABCD  ARPA   GigabitEthernet0/0
+Internet  10.10.10.20        1   00E0.5678.EF01  ARPA   GigabitEthernet0/0
+","Two different MAC addresses are both mapped to 10.10.10.20 in the ARP table, confirming a duplicate IP address conflict between PC-F and Printer1.",Layer 3,IP Addressing,Medium,"show ip arp lists two distinct MAC addresses both claiming 10.10.10.20, which is only possible with a duplicate static assignment.",show ip dhcp conflict; check Printer1's configured static IP,"Reassign Printer1 to an unused address outside the DHCP scope, e.g. 10.10.10.240, and add it to ip dhcp excluded-address",show ip arp; confirm only one MAC maps to 10.10.10.20,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+VLAN-002,Newly wired desk has no network access at all,"A newly wired desk plugged into SW4 Fa0/12 gets no link light response from DHCP and cannot ping anything, including the switch's own management IP.","Fa0/12 was configured for the new Marketing VLAN, VLAN 40, which was supposed to be created as part of the same change.","SW4# show vlan brief
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+1    default                          active    Fa0/1, Fa0/2
+10   Sales                            active    Fa0/3, Fa0/4
+
+SW4# show interfaces fa0/12 switchport
+Name: Fa0/12
+Administrative Mode: static access
+Access Mode VLAN: 40 (Inactive)
+","Fa0/12 is assigned to VLAN 40, but VLAN 40 was never created with 'vlan 40' in global config - it does not appear in show vlan brief at all, so the port shows the access VLAN as 'Inactive' and cannot forward traffic.",Layer 2,VLAN,High,"show vlan brief lists only VLAN 1 and VLAN 10 - VLAN 40 is absent. show interfaces fa0/12 switchport confirms the port's assigned VLAN 40 is marked (Inactive), the standard symptom of a port assigned to a non-existent VLAN.",show running-config | section vlan,vlan 40; name Marketing (then verify Fa0/12 shows Access Mode VLAN: 40 active),show vlan brief; ipconfig /renew on the desk PC,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+TRUNK-002,"Random VLAN 1 traffic bleeding, CDP native VLAN mismatch warning","Console on SW1 periodically logs a '%CDP-4-NATIVE_VLAN_MISMATCH' message for Gi0/2, and untagged/VLAN 1 management traffic occasionally appears where it shouldn't.","SW1 Gi0/2 trunks to SW5 Gi0/1, carrying VLANs 1,10,20.","SW1# show interfaces trunk
+Port        Mode      Encapsulation  Status       Native vlan
+Gi0/2       on        802.1q         trunking     1
+
+SW5# show interfaces trunk
+Port        Mode      Encapsulation  Status       Native vlan
+Gi0/1       on        802.1q         trunking     99
+","SW1's Gi0/2 uses native VLAN 1 while SW5's Gi0/1 uses native VLAN 99 on the same trunk. A native VLAN mismatch causes untagged frames to be interpreted as belonging to different VLANs on each end, leaking traffic between VLAN 1 and VLAN 99.",Layer 2,Trunking,Medium,show interfaces trunk on SW1 reports native vlan 1 for Gi0/2; the same trunk's other end on SW5 reports native vlan 99 for Gi0/1 - the two ends disagree on the native VLAN.,show run interface gi0/2 on both switches to see the native vlan command explicitly,switchport trunk native vlan 1 on SW5 Gi0/1 (align both ends to the same native VLAN),show interfaces trunk on both switches; confirm CDP native VLAN mismatch log clears,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+VLAN-003,Server unreachable from its own VLAN's users after a cable move,"Server2 was recently re-patched to a different switch port during a rack cleanup. Since then, no VLAN 10 client can reach it, though the server itself reports 'connected' at Layer 1.",Server2 (10.10.10.60) should be on a VLAN 10 access port. It was re-patched into SW2 Fa0/9.,"SW2# show interfaces fa0/9 switchport
+Name: Fa0/9
+Administrative Mode: static access
+Access Mode VLAN: 30 (Guest)
+
+SW2# show mac address-table interface fa0/9
+Vlan    Mac Address       Type        Ports
+30      00d0.bcaa.1111    DYNAMIC     Fa0/9
+","Fa0/9, the port Server2 was re-patched into, is an access port in VLAN 30 (Guest), not VLAN 10. Server2's MAC is learned in VLAN 30, confirming it is physically connected in the wrong VLAN.",Layer 2,VLAN,High,"show interfaces fa0/9 switchport shows Access Mode VLAN 30; show mac address-table interface fa0/9 confirms Server2's MAC was learned on VLAN 30, not VLAN 10.","show vlan brief to find a free VLAN 10 port, or plan to re-tag Fa0/9",switchport access vlan 10 on interface Fa0/9 (or re-patch to a known VLAN 10 port),show mac address-table interface fa0/9; ping Server2 from a VLAN 10 client,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+INTERVLAN-001,VLAN 30 reaches gateway but not VLAN 10 server,"PC in VLAN 30 receives an IP address and can ping its default gateway, but cannot reach the server in VLAN 10.",PC30 is connected to SW1 Fa0/5 (VLAN 30). SW1 connects to R1 using Gi0/1 as an 802.1Q trunk. Server10 (10.10.10.50) is connected to SW2 in VLAN 10. R1 uses router-on-a-stick with subinterfaces for inter-VLAN routing.,"R1# show ip interface brief
+Interface                 IP-Address      OK? Method Status    Protocol
+GigabitEthernet0/1        unassigned      YES unset  up        up
+GigabitEthernet0/1.10     unassigned      YES manual up        up
+GigabitEthernet0/1.30     10.10.30.1      YES manual up        up
+
+R1# show run interface gi0/1.10
+interface GigabitEthernet0/1.10
+ encapsulation dot1Q 10
+
+R1# show interfaces trunk
+(run on SW1)
+Port    Mode  Encapsulation  Status     Native vlan
+Gi0/1   on    802.1q         trunking   1
+","Subinterface Gi0/1.10 has 'encapsulation dot1Q 10' but no IP address configured (shown as unassigned), so R1 has no gateway for VLAN 10 and cannot route between VLAN 30 and VLAN 10, even though the trunk to SW1 and VLAN 30's subinterface are both fine.",Layer 3,Inter-VLAN Routing,High,"show ip interface brief shows Gi0/1.10 as 'unassigned' for its IP address while Gi0/1.30 correctly has 10.10.30.1; the trunk itself is confirmed up, isolating the fault to the missing VLAN 10 subinterface IP.",show vlan brief on SW2 to confirm Server10 is actually in VLAN 10,interface GigabitEthernet0/1.10; ip address 10.10.10.1 255.255.255.0,show ip interface brief; ping 10.10.10.50 from PC30,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+WIFI-001,Laptops cannot see the office Wi-Fi network at all,"No laptops in the east wing can see 'CorpWiFi' in their available network list, though they could last week.","AP-East is an autonomous access point wired to SW3 Fa0/4, broadcasting SSID CorpWiFi on VLAN 10.","AP-East# show running-config | section dot11 ssid
+dot11 ssid CorpWiFi
+ vlan 10
+ authentication open
+ guest-mode disable
+
+AP-East# show interfaces dot11radio 0
+Dot11Radio0 is administratively down, line protocol is down
+","The SSID CorpWiFi is configured correctly, but the radio interface Dot11Radio0 is administratively down, so the AP is not transmitting at all - no client can see the SSID.",Layer 1,Wireless,Critical,"SSID configuration for CorpWiFi looks correct with guest-mode disable and vlan 10, but show interfaces dot11radio 0 reports the radio itself as administratively down.",show interfaces fa0/4 on SW3 to confirm the AP's wired uplink is up,interface Dot11Radio0; no shutdown,show interfaces dot11radio 0; scan for CorpWiFi from a laptop,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+WIFI-002,Guest Wi-Fi users cannot print to the lobby printer,"Guests on the GuestWiFi SSID can browse the internet fine but cannot discover or print to LobbyPrinter (10.10.99.20), which is also on the guest VLAN.",GuestWiFi maps to VLAN 99. LobbyPrinter is wired into VLAN 99 on SW6. Client isolation (peer-to-peer blocking) was enabled on the guest WLAN for security.,"WLC# show wlan 3
+WLAN Identifier.................................. 3
+Profile Name...................................... GuestWiFi
+P2P Blocking Action............................... Drop
+Interface......................................... vlan99
+","P2P Blocking Action is set to 'Drop' on the GuestWiFi WLAN, which intentionally blocks client-to-client (and client-to-device) traffic within the guest VLAN, including to LobbyPrinter. This is a working-as-designed security feature, not a fault, but it is the root cause of the symptom.",Layer 2,Wireless,Low,"show wlan 3 confirms P2P Blocking Action is set to Drop on the GuestWiFi profile bound to vlan99, which is the same VLAN as LobbyPrinter.",show wlan 3 (already conclusive); confirm with stakeholders whether printing should be allowed,"If printing is a desired guest feature: set P2P Blocking Action to Allow, or move the printer to a small dedicated 'guest services' VLAN excluded from isolation.",Attempt print discovery from a guest client after the policy change,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+ROUTE-002,Entire company can reach internal sites but not the internet,"All internal traffic (site to site) works normally, but no one anywhere in the company can reach any external website or public IP address.",EdgeR connects the internal network to the ISP router at 203.0.113.1 via Gi0/2.,"EdgeR# show ip route
+Gateway of last resort is not set
+
+     10.0.0.0/8 is variably subnetted, 6 subnets, 2 masks
+        via OSPF, internal networks
+     203.0.113.0/30 is directly connected, GigabitEthernet0/2
+
+EdgeR# ping 203.0.113.1
+!!!!!
+Success rate is 100 percent
+","EdgeR has no default route (Gateway of last resort is not set). Internal OSPF routes exist and the link to the ISP is up, but there is no 0.0.0.0/0 route pointing to the ISP, so any destination outside the known internal networks is unroutable.",Layer 3,Routing,Critical,"show ip route explicitly states 'Gateway of last resort is not set' and lists no 0.0.0.0/0 entry, while the ISP-facing interface and next hop (203.0.113.1) are confirmed reachable by ping.",show run | include ip route (confirm no static default route exists anywhere),ip route 0.0.0.0 0.0.0.0 203.0.113.1,show ip route; ping 8.8.8.8 from an internal host,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+GW-002,Whole VLAN 20 lost external access after DHCP pool edit,Every PC in VLAN 20 can reach each other but none can reach any other VLAN or the internet. This started right after an admin edited the DHCP pool to add a new DNS server.,"R1 Gi0/0.20 is 10.10.20.1/24, the correct gateway for VLAN 20. R1 is also the DHCP server for VLAN 20.","R1# show run | section dhcp pool VLAN20
+ip dhcp pool VLAN20
+ network 10.10.20.0 255.255.255.0
+ default-router 10.10.20.100
+ dns-server 8.8.8.8
+
+PC-G> ipconfig
+IP Address..........: 10.10.20.55
+Default Gateway......: 10.10.20.100
+","The DHCP pool's default-router was mistakenly set to 10.10.20.100 instead of 10.10.20.1 (R1's real subinterface IP). No device answers ARP for .100, so nothing beyond the local VLAN is reachable for any DHCP client.",Layer 3,Default Gateway,High,"The dhcp pool VLAN20 config shows default-router 10.10.20.100; PC-G's ipconfig confirms it received that as its gateway, but R1's actual subinterface address is 10.10.20.1, a mismatch.",show ip interface brief on R1 to confirm the real subinterface address,"Edit dhcp pool VLAN20: default-router 10.10.20.1, then have clients renew",ipconfig /renew on PC-G; ping 10.10.20.1; ping 8.8.8.8,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+DHCP-002,Only the first few PCs each morning get an IP address,"Every morning, the first handful of PCs to boot get IP addresses normally, but PCs booted afterward get APIPA addresses until the office is rebooted overnight again.",VLAN 10 has roughly 40 PCs. The DHCP pool for VLAN 10 covers 10.10.10.0/24.,"R1# show ip dhcp pool VLAN10
+Pool VLAN10 :
+ Network: 10.10.10.0/24
+ Leased addresses: 6
+
+R1# show run | section ip dhcp excluded-address
+ip dhcp excluded-address 10.10.10.1 10.10.10.250
+","The excluded-address range 10.10.10.1-10.10.10.250 removes nearly the entire /24 from the usable DHCP pool, leaving only addresses .251-.254 (a handful) available - explaining why only a few PCs can lease an address before the pool is exhausted.",Layer 7,DHCP,High,"show run confirms ip dhcp excluded-address 10.10.10.1 10.10.10.250, which excludes 250 of 254 usable addresses in the /24 pool, consistent with only a small number of leases succeeding.",show ip dhcp binding to confirm exactly which addresses are currently leased,"Narrow the exclusion to only the addresses actually reserved for static devices, e.g. 'ip dhcp excluded-address 10.10.10.1 10.10.10.10'",show ip dhcp pool VLAN10; ipconfig /renew on a previously-failing PC,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+DNS-002,Internal hostname lookups fail company-wide after router swap,"After R2 replaced a failed router, no internal hostnames resolve anywhere in the company, though external domains like google.com resolve fine.","R2 is configured as a DNS relay ('ip dns server') that forwards queries to the real internal DNS host, Server1 (10.10.10.53).","R2# show run | include ip name-server
+ip name-server 8.8.8.8
+
+R2# show run | include ip dns server
+ip dns server
+","R2's DNS relay is configured with ip name-server 8.8.8.8 only - the internal authoritative DNS host Server1 (10.10.10.53) was never added as a name-server, so R2 forwards every query, including internal-only hostnames, to the public resolver, which has no record of them.",Layer 7,DNS,Medium,"ip name-server is set only to 8.8.8.8. There is no entry for 10.10.10.53 (Server1, the internal DNS host), which explains why external names resolve but internal ones do not.",ping 10.10.10.53 from R2 to confirm Server1 itself is reachable,ip name-server 10.10.10.53 8.8.8.8,nslookup an internal hostname from a client PC,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+ACL-002,"Intranet web portal unreachable, but file share on same server works","Users cannot load the intranet web portal at http://10.10.10.80, but can still access a file share (SMB) on the exact same server without issue.",R1 applies an extended ACL WEB-FILTER inbound on Gi0/0 (the users' side) intended to block only outbound P2P ports.,"R1# show access-lists WEB-FILTER
+Extended IP access list WEB-FILTER
+    10 deny tcp any any eq 80
+    20 deny tcp any any eq 6881
+    30 permit ip any any
+
+R1# show run | section interface Gi0/0
+interface GigabitEthernet0/0
+ ip access-group WEB-FILTER in
+","Line 10 of WEB-FILTER denies all TCP port 80 (HTTP) traffic, which was meant to only block port 6881 (P2P/BitTorrent). This blocks the intranet portal's HTTP traffic while SMB (port 445) is unaffected since it isn't matched by either deny line.",Layer 4,ACL,Medium,"WEB-FILTER line 10 explicitly denies tcp any any eq 80, applied inbound on the users' interface Gi0/0; SMB (port 445) is not referenced by the ACL, consistent with file-share access still working.",show access-lists WEB-FILTER (already conclusive),Remove or renumber the 'deny tcp any any eq 80' line so only port 6881 is denied,show access-lists WEB-FILTER for hit counters; browse to http://10.10.10.80,Easy,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+NAT-002,Internet works for a while then stops for everyone,"Internet access works fine in the morning but stops working for the whole office by early afternoon, and does not recover until the router is reloaded.",R1 uses a NAT pool of 4 public addresses (203.0.113.10-203.0.113.13) for roughly 60 inside hosts.,"R1# show run | section ip nat pool
+ip nat pool PUBLIC-POOL 203.0.113.10 203.0.113.13 netmask 255.255.255.252
+ip nat inside source list 1 pool PUBLIC-POOL
+
+R1# show ip nat statistics
+Total active translations: 4 (0 static, 4 dynamic)
+Pool PUBLIC-POOL: netmask 255.255.255.252
+  start 203.0.113.10 end 203.0.113.13
+  type generic, total addresses 4, allocated 4 (100%), misses 812
+","The NAT pool statement is missing the 'overload' keyword, so each of the 4 public addresses can only be used for one inside host's session at a time (one-to-one), not shared via PAT. With ~60 inside hosts and only 4 addresses, the pool is exhausted quickly (misses: 812) and new translations fail until old ones age out.",Layer 3,NAT,High,"show ip nat statistics shows the 4-address pool at 100% allocation with 812 misses, and the running-config's 'ip nat inside source list 1 pool PUBLIC-POOL' line has no overload keyword, meaning it cannot multiplex many hosts per address.",show ip nat translations to confirm many inside hosts are waiting on translations,ip nat inside source list 1 pool PUBLIC-POOL overload,show ip nat statistics; confirm allocated stays healthy under full office load,Hard,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+NAT-003,NAT config looks correct but nothing translates,PCs on the inside network cannot reach the internet at all. 'show ip nat translations' stays completely empty no matter how many hosts try to browse.,R1 Gi0/0 faces the inside network 192.168.1.0/24; Gi0/1 faces the ISP.,"R1# show ip nat translations
+(empty)
+
+R1# show run | section ip nat|interface Gi
+interface GigabitEthernet0/0
+ ip address 192.168.1.1 255.255.255.0
+interface GigabitEthernet0/1
+ ip address 203.0.113.10 255.255.255.252
+ip nat inside source list 1 interface GigabitEthernet0/1 overload
+access-list 1 permit 192.168.1.0 0.0.0.255
+","Neither Gi0/0 nor Gi0/1 has the 'ip nat inside' / 'ip nat outside' commands applied. The NAT rule, pool, and ACL are all correctly configured, but without marking the interfaces, the router never actually performs any translation.",Layer 3,NAT,Critical,"The interface configuration for Gi0/0 and Gi0/1 contains only IP addressing, with no 'ip nat inside' or 'ip nat outside' lines, even though the nat source list and ACL rules exist and are otherwise correct.",show ip nat statistics to confirm zero translations attempted,interface GigabitEthernet0/0; ip nat inside - and - interface GigabitEthernet0/1; ip nat outside,show ip nat translations while a PC browses the internet,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+ROUTE-003,Traceroute to remote site shows TTL expiring in a loop,Traffic to the 172.16.40.0/24 branch network never arrives. A traceroute shows packets bouncing between two routers repeatedly before timing out.,"R1 and R2 are both candidate paths to 172.16.40.0/24, which physically only exists behind R2 via R2's Gi0/2 (10.0.12.2 is R1-R2 link on R1 side).","R1# traceroute 172.16.40.10
+  1 10.0.12.2  4 msec
+  2 10.0.12.1  6 msec
+  3 10.0.12.2  5 msec
+  4 10.0.12.1  4 msec
+  (pattern repeats until max TTL)
+
+R1# show ip route 172.16.40.0
+Routing entry for 172.16.40.0/24
+  Known via ""static"", distance 1
+  Routing Descriptor Blocks:
+  * 10.0.12.2
+
+R2# show ip route 172.16.40.0
+Routing entry for 172.16.40.0/24
+  Known via ""static"", distance 1
+  Routing Descriptor Blocks:
+  * 10.0.12.1
+","Both R1 and R2 have a static route for 172.16.40.0/24 pointing at each other (R1 to 10.0.12.2, R2 back to 10.0.12.1), forming a two-hop routing loop. R2's static route should instead point to its real Gi0/2 next hop toward the branch, not back to R1.",Layer 3,Routing,High,traceroute shows the path oscillating between 10.0.12.1 and 10.0.12.2 without progressing; show ip route 172.16.40.0 on both routers confirms each points the route back at the other.,show ip interface brief on R2 to identify the correct next hop toward 172.16.40.0/24,Remove the incorrect static route on R2 and replace with the correct next hop toward the branch (e.g. via Gi0/2),traceroute 172.16.40.10 from R1 after the correction,Hard,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+STP-001,Half the building loses connectivity when one switch reboots,"When SW-Core reboots for maintenance, an entire wing of the building loses connectivity for several minutes even though a redundant uplink exists.","SW-Access has two uplinks to SW-Core: Gi0/1 (primary) and Gi0/2 (backup, normally blocking via STP).","SW-Access# show spanning-tree vlan 10
+  Interface           Role Sts Cost      Prio.Nbr Type
+  -------------------- ---- --- --------- -------- --------------------------------
+  Gi0/1                Root FWD 4         128.1    P2p
+  Gi0/2                Altn BLK 4         128.2    P2p
+
+SW-Access# show interfaces gi0/2
+GigabitEthernet0/2 is up, line protocol is up
+","This is expected STP behavior under normal conditions - Gi0/2 is correctly in the Alternate/Blocking role while Gi0/1 is root/forwarding. The outage during SW-Core's reboot is the normal STP re-convergence delay (listening/learning states) before Gi0/2 transitions to forwarding, not a misconfiguration.",Layer 2,STP,Low,"show spanning-tree vlan 10 shows Gi0/2 in role Altn / status BLK as designed, and show interfaces gi0/2 confirms the physical link itself is up - the redundant path exists and is healthy, just temporarily blocking per STP rules.",show spanning-tree vlan 10 detail to check timers (hello/forward-delay) for convergence speed,"If faster failover is required, consider enabling PortFast/UplinkFast equivalents or migrating to Rapid PVST+ (spanning-tree mode rapid-pvst) to shorten convergence time.",show spanning-tree vlan 10 during a controlled SW-Core reload to time convergence,Hard,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+SEC-001,Employee's laptop loses network after swapping docking stations,"An employee borrowed a coworker's docking station and has had no network access since, even after switching back to their own dock. The port's link light is amber/orange.",SW1 Fa0/15 has port security configured to allow exactly one MAC address (the employee's original dock).,"SW1# show port-security interface fa0/15
+Port Security              : Enabled
+Port Status                : Secure-shutdown
+Violation Mode              : Shutdown
+Maximum MAC Addresses       : 1
+Total MAC Addresses         : 1
+Security Violation Count    : 1
+Last Source Address:Vlan    : 00E0.AAAA.1111:10
+","Port Fa0/15 is in 'Secure-shutdown' (err-disabled) state after a port-security violation - a second, different MAC address (the coworker's dock) appeared on a port allowed only one MAC, triggering the configured Shutdown violation action. The port will not recover automatically.",Layer 2,Port Security,Medium,"show port-security interface fa0/15 reports Port Status: Secure-shutdown and Security Violation Count: 1, with Maximum MAC Addresses set to 1, confirming a second MAC triggered the shutdown violation action.",show mac address-table interface fa0/15 to see which MAC is currently secured,shutdown then no shutdown on Fa0/15 to clear err-disable (after confirming only the authorized device will reconnect),show port-security interface fa0/15; confirm status returns to Secure-up,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+WIFI-003,Laptops see the SSID but fail to connect with 'incorrect password',"Employees can see the CorpWiFi network and attempt to connect with the passphrase from the IT wiki, but every device reports an authentication failure.",AP-West broadcasts CorpWiFi with WPA2-PSK security. IT recently rotated the passphrase as part of a security review.,"AP-West# show running-config | section dot11 ssid CorpWiFi
+dot11 ssid CorpWiFi
+ vlan 10
+ authentication open
+ authentication key-management wpa version 2
+ wpa-psk ascii 7 105D0F1B48
+","The AP's WPA2-PSK passphrase (encrypted form shown as '105D0F1B48') was rotated on the AP, but the IT wiki entry was not updated at the same time - employees are entering the old, now-invalid passphrase, causing authentication to fail for everyone.",Layer 2,Wireless,Medium,"The AP config confirms wpa-psk is actively set (a non-empty encrypted key), and authentication mode is open/wpa2, ruling out a broken AP config; the fault pattern (SSID visible, instant auth failure for all users) is consistent with a passphrase mismatch versus what users are entering.",Confirm with IT change log whether the passphrase was recently rotated,Update the IT wiki/documentation with the new passphrase and redistribute it to staff,Connect a test laptop with the newly documented passphrase,Medium,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset
+MIXED-001,New branch office partially working after go-live,"At the newly opened branch, PCs in the Sales VLAN can reach the local branch server, but PCs in the Ops VLAN cannot reach anything outside their own VLAN, including the local server or HQ.",BranchSW has Sales on VLAN 10 and Ops on VLAN 20. BranchR does router-on-a-stick for both VLANs and connects to HQ over a WAN link.,"BranchSW# show interfaces fa0/10 switchport
+Name: Fa0/10
+Administrative Mode: static access
+Access Mode VLAN: 20 (Ops)
+
+BranchR# show ip interface brief
+Interface                 IP-Address       OK? Method Status  Protocol
+GigabitEthernet0/0.10     10.20.10.1       YES manual up      up
+GigabitEthernet0/0.20     10.20.20.1       YES manual up      up
+Serial0/0/0                192.168.200.1   YES manual up      up
+
+BranchR# show ip route
+     10.20.10.0/24 is directly connected, GigabitEthernet0/0.10
+     10.20.20.0/24 is directly connected, GigabitEthernet0/0.20
+     192.168.200.0/30 is directly connected, Serial0/0/0
+     (no route to HQ networks, e.g. 172.16.0.0/16)
+","Two independent faults are present. (1) Ops VLAN's local server port issue is not evident here, but Ops (VLAN 20) traffic leaving the branch has no path to HQ at all: BranchR's routing table has no route toward HQ's 172.16.0.0/16 networks, despite the WAN serial link being up. (2) Separately, Fa0/10's VLAN 20 assignment should be reviewed against the intended port map, since it governs whether Ops PCs land in the right subnet in the first place.",Layer 3,Routing,Critical,"show ip route on BranchR lists only directly connected networks and the serial link - no route to HQ's 172.16.0.0/16 exists even though Serial0/0/0 (192.168.200.1) is up/up, which explains why nothing beyond the local VLANs is reachable for any branch VLAN, not just Ops.",show ip route on the HQ-side router to confirm what return route/summarization is expected,"Add the missing route toward HQ, e.g. 'ip route 172.16.0.0 255.255.0.0 192.168.200.2' (or enable the intended dynamic routing protocol on the WAN link), then separately confirm Fa0/10's VLAN assignment matches the port map.",show ip route on BranchR; ping an HQ host from both Sales and Ops VLANs,Hard,active,seed,2026-06-01T00:00:00Z,2026-06-01T00:00:00Z,NetSage AI Course Dataset

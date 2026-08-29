@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-surface-0: #F3F4F6;
+    --color-surface-1: #FFFFFF;
+    --color-surface-2: #F9FAFB;
+    --color-surface-3: #E5E7EB;
+    --color-surface-border: #E5E7EB;
+
+    --color-ink-primary: #111827;
+    --color-ink-secondary: #4B5563;
+    --color-ink-muted: #6B7280;
+
+    --color-signal-pass: #10B981;
+    --color-signal-passDim: #D1FAE5;
+    --color-signal-warn: #F59E0B;
+    --color-signal-warnDim: #FEF3C7;
+    --color-signal-fail: #EF4444;
+    --color-signal-failDim: #FEE2E2;
+    --color-signal-info: #3B82F6;
+    --color-signal-infoDim: #DBEAFE;
+
+    --color-accent: #3B82F6;
+    --color-accent-teal: #14B8A6;
+    --color-accent-amber: #F59E0B;
+  }
+
+  .dark {
+    --color-surface-0: #0B0F14;
+    --color-surface-1: #111720;
+    --color-surface-2: #182130;
+    --color-surface-3: #212C3D;
+    --color-surface-border: #2A3547;
+
+    --color-ink-primary: #E7ECF3;
+    --color-ink-secondary: #9CA9BD;
+    --color-ink-muted: #6B7789;
+
+    --color-signal-pass: #2FD98A;
+    --color-signal-passDim: #173B2C;
+    --color-signal-warn: #F5B942;
+    --color-signal-warnDim: #40331A;
+    --color-signal-fail: #F1594C;
+    --color-signal-failDim: #3E1C1B;
+    --color-signal-info: #4FB8E8;
+    --color-signal-infoDim: #173442;
+
+    --color-accent: #4FB8E8;
+    --color-accent-teal: #2FD9C4;
+    --color-accent-amber: #F5B942;
+  }
+
+  html {
+    background-color: var(--color-surface-0);
+  }
+  body {
+    @apply bg-surface-0 text-ink-primary antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  ::selection {
+    background-color: rgba(79, 184, 232, 0.35); /* We can leave this or map it later */
+  }
+  /* Thin, low-contrast scrollbars that fit the console aesthetic */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #2a3547;
+    border-radius: 999px;
+    border: 2px solid #0b0f14;
+  }
+}
+
+@layer components {
+  .mono-block {
+    @apply font-mono text-[13px] leading-relaxed whitespace-pre-wrap break-words;
+  }
+}
