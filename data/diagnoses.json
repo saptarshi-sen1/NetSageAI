@@ -1,0 +1,90 @@
+{
+  "VLAN-001": {
+    "model_used": "mock",
+    "mock_mode": true,
+    "ai_diagnosis": {
+      "root_cause": "Fa0/6 (PC-A's port) is statically assigned to VLAN 20 (Engineering) instead of VLAN 10 (Sales), placing PC-A in a different broadcast domain than FileServer1.",
+      "confidence": 0.9,
+      "confidence_label": "High",
+      "osi_layer": "Layer 2",
+      "concept": "VLAN",
+      "evidence": [
+        "show vlan brief confirms VLAN 10 exists and holds FileServer1's segment.",
+        "show interfaces fa0/6 switchport shows Fa0/6 access VLAN is 20, not 10."
+      ],
+      "reasoning_summary": "The supplied evidence (show vlan brief confirms VLAN 10 exists and holds FileServer1's segment; show interfaces fa0/6 switchport shows Fa0/6 access VLAN is 20, not 10) is consistent with: Fa0/6 (PC-A's port) is statically assigned to VLAN 20 (Engineering) instead of VLAN 10 (Sales), placing PC-A in a different broadcast domain than FileServer1.",
+      "next_command": "show mac address-table interface fa0/6",
+      "fix_steps": [
+        "switchport access vlan 10 on interface Fa0/6"
+      ],
+      "verification_steps": [
+        "show vlan brief",
+        "then ping 10.10.10.50 from PC-A"
+      ],
+      "human_review_required": true
+    },
+    "rule_findings": [
+      {
+        "rule": "access_port_vlan_mismatch",
+        "status": "FAIL",
+        "severity": "HIGH",
+        "evidence": "Case notes state the device should be on VLAN 10; switchport evidence shows Access Mode VLAN: 20",
+        "message": "The port's actual access VLAN (20) does not match the VLAN (10) the device is expected to be on."
+      }
+    ],
+    "raw_response": "{\"root_cause\": \"Fa0/6 (PC-A's port) is statically assigned to VLAN 20 (Engineering) instead of VLAN 10 (Sales), placing PC-A in a different broadcast domain than FileServer1.\", \"confidence\": 0.9, \"confidence_label\": \"High\", \"osi_layer\": \"Layer 2\", \"concept\": \"VLAN\", \"evidence\": [\"show vlan brief confirms VLAN 10 exists and holds FileServer1's segment.\", \"show interfaces fa0/6 switchport shows Fa0/6 access VLAN is 20, not 10.\"], \"reasoning_summary\": \"The supplied evidence (show vlan brief confirms VLAN 10 exists and holds FileServer1's segment; show interfaces fa0/6 switchport shows Fa0/6 access VLAN is 20, not 10) is consistent with: Fa0/6 (PC-A's port) is statically assigned to VLAN 20 (Engineering) instead of VLAN 10 (Sales), placing PC-A in a different broadcast domain than FileServer1.\", \"next_command\": \"show mac address-table interface fa0/6\", \"fix_steps\": [\"switchport access vlan 10 on interface Fa0/6\"], \"verification_steps\": [\"show vlan brief\", \"then ping 10.10.10.50 from PC-A\"], \"human_review_required\": true}",
+    "fallback_occurred": false
+  },
+  "CASE-0001": {
+    "model_used": "mock",
+    "mock_mode": true,
+    "ai_diagnosis": {
+      "root_cause": "API test fault",
+      "confidence": 0.9,
+      "confidence_label": "High",
+      "osi_layer": "Layer 3",
+      "concept": "Routing",
+      "evidence": [
+        "API test evidence."
+      ],
+      "reasoning_summary": "The supplied evidence (API test evidence) is consistent with: API test fault",
+      "next_command": "show ip route",
+      "fix_steps": [
+        "API test fix"
+      ],
+      "verification_steps": [
+        "ping test"
+      ],
+      "human_review_required": true
+    },
+    "rule_findings": [],
+    "raw_response": "{\"root_cause\": \"API test fault\", \"confidence\": 0.9, \"confidence_label\": \"High\", \"osi_layer\": \"Layer 3\", \"concept\": \"Routing\", \"evidence\": [\"API test evidence.\"], \"reasoning_summary\": \"The supplied evidence (API test evidence) is consistent with: API test fault\", \"next_command\": \"show ip route\", \"fix_steps\": [\"API test fix\"], \"verification_steps\": [\"ping test\"], \"human_review_required\": true}",
+    "fallback_occurred": false
+  },
+  "PRACTICE-SEED-001": {
+    "model_used": "mock",
+    "mock_mode": true,
+    "ai_diagnosis": {
+      "root_cause": "Fa0/3 is assigned to VLAN 20 instead of VLAN 10.",
+      "confidence": 0.9,
+      "confidence_label": "High",
+      "osi_layer": "Layer 2",
+      "concept": "VLAN",
+      "evidence": [
+        "show vlan brief confirms Fa0/3 is in VLAN 20."
+      ],
+      "reasoning_summary": "The supplied evidence (show vlan brief confirms Fa0/3 is in VLAN 20) is consistent with: Fa0/3 is assigned to VLAN 20 instead of VLAN 10.",
+      "next_command": "show interfaces fa0/3 switchport",
+      "fix_steps": [
+        "switchport access vlan 10"
+      ],
+      "verification_steps": [
+        "ping the file server from PC1"
+      ],
+      "human_review_required": true
+    },
+    "rule_findings": [],
+    "raw_response": "{\"root_cause\": \"Fa0/3 is assigned to VLAN 20 instead of VLAN 10.\", \"confidence\": 0.9, \"confidence_label\": \"High\", \"osi_layer\": \"Layer 2\", \"concept\": \"VLAN\", \"evidence\": [\"show vlan brief confirms Fa0/3 is in VLAN 20.\"], \"reasoning_summary\": \"The supplied evidence (show vlan brief confirms Fa0/3 is in VLAN 20) is consistent with: Fa0/3 is assigned to VLAN 20 instead of VLAN 10.\", \"next_command\": \"show interfaces fa0/3 switchport\", \"fix_steps\": [\"switchport access vlan 10\"], \"verification_steps\": [\"ping the file server from PC1\"], \"human_review_required\": true}",
+    "fallback_occurred": false
+  }
+}
